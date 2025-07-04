@@ -15,6 +15,7 @@ define('separate_in_subfolders', false);
 // if true, will always output webp format if possible, otherwise will output the original format
 // this will only work if the original image is in jpg, png or webp format
 define('enforce_webp_output', true);
+define('webp_quality', 80); // quality of the webp image, default is 80
 
 function generateFilename($pathinfo, $imgtype)
 {
@@ -273,9 +274,9 @@ if ((isset($_GET['do'])) and (isset($_GET['path']))) {
         };
 
         ob_start();
-        if (enforce_webp_output) {
-            imagewebp($img_dest, null, 80);
-            imagewebp($img_dest, $cachedname, 80);
+        if (enforce_webp_output || $imgtype == 'webp') {
+            imagewebp($img_dest, null, webp_quality);
+            imagewebp($img_dest, $cachedname, webp_quality);
             $info['mime'] = 'image/webp';
         } else {
             switch ($imgtype) {
