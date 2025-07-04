@@ -2,18 +2,25 @@
 
 // draw.php
 //
-// version 1.0.9
-// last update: 2025, January 13 (updated to PHP 8.3.0)
+// version 1.1.0
+// last update: 2025, July 4 (webp support added)
 
 ini_set('memory_limit', '32M');
 define('cache_path', 'files/draw.cache/');
-define('separate_by_folders', 'yes');
+
+// set this to true if you want to separate images in subfolders
+// this will create subfolders in the cache_path based on the first 5 characters of the image name
+// e.g. if the image name is "someimage.jpg", it will create a subfolder "someim" in the cache_path
+define('separate_in_subfolders', false);
+// if true, will always output webp format if possible, otherwise will output the original format
+// this will only work if the original image is in jpg, png or webp format
+define('enforce_webp_output', true);
 
 function generateFilename($pathinfo, $imgtype)
 {
     $imagename = md5($pathinfo['dirname']) . "_" . $pathinfo['filename']; // пътят става MD5 от целия път + само името
     $dirname = '';
-    if (separate_by_folders && separate_by_folders == 'yes') {
+    if (separate_in_subfolders) {
         $dirname = substr($imagename, strrpos($imagename, '.') - 5);
     }
     $cachedname = cache_path . $imgtype . '/' . $dirname . '/' . $imagename . '_' . @$_GET['do'] . '_' . (isset($_GET['size']) && $_GET['size'] > 0 ? 's' . $_GET['size'] : 'w' . @$_GET['w'] . '_h' . @$_GET['h']);
@@ -47,18 +54,18 @@ if ((isset($_GET['do'])) and (isset($_GET['path']))) {
         $x = $info[0];
         $y = $info[1];
         $imgtype = 'unknown';
-        switch ($info[2]) {
-            case 1:
+        switch ($info['mime']) {
+            case 'image/gif':
                 $imgtype = 'gif';
                 break;
-            case 2:
+            case 'image/jpeg':
                 $imgtype = 'jpg';
                 break;
-            case 3:
+            case 'image/png':
                 $imgtype = 'png';
                 break;
-            case 6:
-                $imgtype = 'bmp';
+            case 'image/webp':
+                $imgtype = 'webp';
                 break;
             default:
                 die("Unsupported format " . $info[2] . "!");
@@ -68,31 +75,31 @@ if ((isset($_GET['do'])) and (isset($_GET['path']))) {
         $imgtype = substr(strrchr($_GET['path'], '.'), 1);
     }
     // sample cached filename -> someimage_resize_w100_h50.jpg
-    //$imagename = strtolower(strtr($_GET['path'], array('/' => "_"))); // old
-    $cachedname = generateFilename($pathinfo, $imgtype);
+    $cachedname = generateFilename($pathinfo, (enforce_webp_output ? 'webp' : $imgtype));
+    $originalname = $pathinfo['filename'] . '.' . (enforce_webp_output ? 'webp' : $imgtype);
 
     if (file_exists($cachedname)) {
         $image = file_get_contents($cachedname);
     } else {
-        switch ($info[2]) {
-            case 1:
-                $im = @imagecreatefromgif($imgname) or die("<h2>Can't open image file !</h2> ");
+        switch ($imgtype) {
+            case 'gif':
+                $im = @imagecreatefromgif($imgname);
                 break;
-            case 2:
-                $im = @imagecreatefromjpeg($imgname) or die("<h2>Can't open image file !</h2> ");
+            case 'jpg':
+                $im = @imagecreatefromjpeg($imgname);
                 break;
-            case 3:
-                $im = @imagecreatefrompng($imgname) or die("<h2>Can't open image file !</h2> ");
+            case 'png':
+                $im = @imagecreatefrompng($imgname);
                 break;
-            case 6:
-                $im = @imagecreatefrombmp($imgname) or die("<h2>Can't open image file !</h2> ");
+            case 'webp':
+                $im = @imagecreatefromwebp($imgname);
                 break;
             default:
                 die("Unsupported format!");
                 break;
         }
         // generating the file path
-        if (separate_by_folders && separate_by_folders == 'yes') {
+        if (separate_in_subfolders) {
             $imagename = md5($pathinfo['dirname']) . "_" . $pathinfo['filename'];
             $dirname = substr($imagename, strrpos($imagename, '.') - 5);
             @mkdir(cache_path . $imgtype . '/' . $dirname, 0777);
@@ -137,10 +144,10 @@ if ((isset($_GET['do'])) and (isset($_GET['path']))) {
                 ) or die("");
                 break;
             case 'resize':
-                //get dimensions
+                // get dimensions
                 $width = isset($_GET['w']) ? $_GET['w'] : null;
                 $height = isset($_GET['h']) ? $_GET['h'] : null;
-                //set ratio
+                // set ratio
                 if (!isset($height) || $height == "x") {
                     $ratio = $y / $x;
                     $height = $width * $ratio;
@@ -148,7 +155,7 @@ if ((isset($_GET['do'])) and (isset($_GET['path']))) {
                     $ratio = $x / $y;
                     $width = $height * $ratio;
                 }
-                //generate image
+                // generate image
                 $img_dest = imagecreatetruecolor($width, $height);
                 if ($imgtype != 'jpg') {
                     imagealphablending($img_dest, false);
@@ -266,29 +273,33 @@ if ((isset($_GET['do'])) and (isset($_GET['path']))) {
         };
 
         ob_start();
-        switch ($imgtype) {
-            default:
-            case 'jpg':
-                imagejpeg($img_dest, null, 80);
-                imagejpeg($img_dest, $cachedname, 80);
-                break;
-            case 'png':
-                imagepng($img_dest);
-                imagepng($img_dest, $cachedname);
-                break;
-            case 'gif':
-                imagegif($img_dest);
-                imagegif($img_dest, $cachedname);
-                break;
-            case 'bmp':
-                imagejpeg($img_dest);
-                imagejpeg($img_dest, $cachedname);
-                break;
+        if (enforce_webp_output) {
+            imagewebp($img_dest, null, 80);
+            imagewebp($img_dest, $cachedname, 80);
+            $info['mime'] = 'image/webp';
+        } else {
+            switch ($imgtype) {
+                default:
+                case 'jpg':
+                    imagejpeg($img_dest, null, 80);
+                    imagejpeg($img_dest, $cachedname, 80);
+                    break;
+                case 'png':
+                    imagepng($img_dest);
+                    imagepng($img_dest, $cachedname);
+                    break;
+                case 'gif':
+                    imagegif($img_dest);
+                    imagegif($img_dest, $cachedname);
+                    break;
+            }
         }
+
         $image = ob_get_clean();
         ImageDestroy($im);
         ImageDestroy($img_dest);
     }
+
     $stats = @stat($imgname);
     $time_ = $stats['mtime'] > 0 ? gmdate("D, d M Y H:i:s", $stats['mtime']) . " GMT" : gmdate(
         "D, d M Y H:i:s",
@@ -296,6 +307,7 @@ if ((isset($_GET['do'])) and (isset($_GET['path']))) {
     ) . " GMT";
     $eTag = "ci-" . md5($image . $time_);
     $headers = getallheaders();
+    
     if (isset($headers['If-None-Match']) && $headers['If-None-Match'] == $eTag && isset($headers['If-Modified-Since']) && ($time_ == $headers['If-Modified-Since'])) {
         header('HTTP/1.1 304 Not Modified');
         header('Cache-Control: private');
@@ -305,6 +317,7 @@ if ((isset($_GET['do'])) and (isset($_GET['path']))) {
         header('ETag: "' . $eTag . '"');
         exit;
     } else {
+        header('Content-disposition: inline;filename="' . $originalname . '"'); 
         header('Etag: ' . $eTag);
         header("Expires: " . gmdate("D, d M Y H:i:s", mktime(0, 0, 0, date("m"), date("d"), date("Y") + 1)) . " GMT");
         header("Last-Modified: " . $time_);
@@ -314,6 +327,7 @@ if ((isset($_GET['do'])) and (isset($_GET['path']))) {
         $size = strlen($image);
         header("Content-Length: $size");
         header("Content-Type: {$info['mime']}");
+
         print $image;
     }
 }
