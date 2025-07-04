@@ -35,6 +35,8 @@ if ((isset($_GET['do'])) and (isset($_GET['path']))) {
         $imgname = "http://" . implode("/", $parts);
     } else {
         $imgname = rawurldecode($_GET['path']);
+        // remove any leading slashes
+        $imgname = ltrim($imgname, '/');
     }
 
     // get image info
