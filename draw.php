@@ -23,6 +23,7 @@ function generateFilename($pathinfo, $imgtype)
     $dirname = '';
     if (separate_in_subfolders) {
         $dirname = substr($imagename, strrpos($imagename, '.') - 5);
+        $dirname = str_replace(' ', '_', $dirname);
     }
     $cachedname = cache_path . $imgtype . '/' . $dirname . '/' . $imagename . '_' . @$_GET['do'] . '_' . (isset($_GET['size']) && $_GET['size'] > 0 ? 's' . $_GET['size'] : 'w' . @$_GET['w'] . '_h' . @$_GET['h']);
     $cachedname .= (isset($_GET['x']) ? '_x' . $_GET['x'] : '');
@@ -103,7 +104,7 @@ if ((isset($_GET['do'])) and (isset($_GET['path']))) {
         if (separate_in_subfolders) {
             $imagename = md5($pathinfo['dirname']) . "_" . $pathinfo['filename'];
             $dirname = substr($imagename, strrpos($imagename, '.') - 5);
-            @mkdir(cache_path . $imgtype . '/' . $dirname, 0777);
+            @mkdir(cache_path . (enforce_webp_output ? 'webp' : $imgtype) . '/' . $dirname, 0777);
         }
         //select action
         switch ($_GET['do']) {
